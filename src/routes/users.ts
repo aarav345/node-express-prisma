@@ -1,10 +1,10 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import {prisma} from "../lib/prisma";
 
 const router = Router();
 
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, name, password } = req.body;
 
@@ -23,19 +23,11 @@ router.post('/', async (req: Request, res: Response) => {
 
 
     } catch (error: any) {
-        // Handle unique constraint violation
-        if (error.code === 'P2002') {
-            return res.status(400).json({ error: 'Email already exists' });
-        }
-
-        res.status(500).json({ 
-            error: 'Failed to create user',
-            details: error.message 
-        });
+        next(error);    
     }
 });
 
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const users = await prisma.user.findMany({
         select: {
@@ -50,15 +42,36 @@ router.get('/', async (req: Request, res: Response) => {
 
         res.json(users);
     } catch (error: any) {
-        res.status(500).json({ 
-        error: 'Failed to fetch users',
-        details: error.message 
-        });
+        next(error);
     }
 });
 
+router.get('/active-users', async (req: Request, res: Response, next: NextFunction) => {
+    try {
 
-router.get('/:id', async (req: Request, res: Response) => {
+        const days = new Date();
+        days.setDate(days.getDate() - 30);
+        
+        const users = await prisma.user.findMany({
+            where: { isActive: true, createdAt: { gt: days } },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                isActive: true,
+                createdAt: true,
+                updatedAt: true
+            }
+        });
+
+        res.status(200).json(users);
+    } catch (error: any) {
+        next(error);
+    }
+})
+
+
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
 
@@ -84,15 +97,12 @@ router.get('/:id', async (req: Request, res: Response) => {
 
         return res.status(200).json(user);
     } catch(error: any) {
-        res.status(500).json({
-            error: 'Failed to get user',
-            details: error.message
-        });
+        next(error);
     }
 });
 
 
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
         const { name, email, isActive } = req.body;
@@ -115,21 +125,12 @@ router.put('/:id', async (req: Request, res: Response) => {
 
         res.status(200).json(user);
     } catch (error: any) {
-        if (error.code === 'P2025') {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        if (error.code === 'P2002') {
-            return res.status(409).json({ error: 'Email already exists' });
-        }
-        res.status(500).json({
-            error: 'Failed to update user',
-            details: error.message
-        });
+        next(error);
     }
 })
 
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
 
@@ -139,16 +140,11 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
         res.status(204).send();
     } catch (error: any) {
-        if (error.code === 'P2025') {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.status(500).json({
-            error: 'Failed to delete user',
-            details: error.message
-        });
+        next(error);
     }
 });
+
+
 
 
 export default router;
